@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "openmemory": {
+      "command": "python3",
+      "args": ["{{STORE}}/integrations/openmemory/openmemory-mcp.py"],
+      "env": {
+        "OPENMEMORY_DATA": "~/.openmemory"
+      }
+    }
+  }
+}

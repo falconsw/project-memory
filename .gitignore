@@ -1,0 +1,7 @@
+# Personal notes never live in this repo; the store is ~/ai-memory (or $PROJECT_MEMORY_HOME).
+projects/*
+!projects/.gitkeep
+USER.md
+*.bak-project-memory
+__pycache__/
+.DS_Store
