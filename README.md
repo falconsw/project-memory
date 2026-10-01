@@ -31,7 +31,7 @@ The full rules are in [PROTOCOL.md](PROTOCOL.md).
 Requires Python 3.9+ (the macOS system `python3` is fine). No dependencies.
 
 ```sh
-git clone <this repo> ~/code/project-memory
+git clone https://github.com/falconsw/project-memory ~/code/project-memory
 ~/code/project-memory/bin/project-memory install
 ```
 
