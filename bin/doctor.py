@@ -39,19 +39,12 @@ SECRET_PATTERNS = [
 UPDATED_RE = re.compile(r"Updated:?\**\s*:?\s*(\d{4}-\d{2}-\d{2})")
 NOTE_REF_RE = re.compile(r"features/([a-z0-9][a-z0-9-]*)\.md")
 COMMIT_RE = re.compile(r"Updated:.*@\s*([0-9a-f]{7,40})")
-KEY_FILES_RE = re.compile(r"(?im)^.*key files?\b.*$")
 INDEX_MAX_ROWS, NOTE_MAX_BULLETS, NOTE_MAX_CHARS = 40, 8, 1800
-
-
-def key_files(text: str) -> list[str]:
-    m = KEY_FILES_RE.search(text)
-    found = re.findall(r"`([^`\s]+)`", m.group(0)) if m else []
-    return [f for f in found if "/" in f or "." in f]
 
 
 def check_drift(path: str, note: str, text: str) -> list[tuple[str, str]]:
     root = c.read_origin(path).get("root", "")
-    files = key_files(text)
+    files = [f.split("(")[0].rstrip(",") for f in c.key_files(text)]
     if not root or not os.path.isdir(root) or not files:
         return []
     out = []
@@ -151,6 +144,9 @@ def check_ides() -> None:
     ]
     for label, ok in checks:
         print("%-4s %s" % ("ok" if ok else "miss", label))
+    seen = c.read_seen(c.store_root())
+    for key in ("claude/session-start", "claude/stop", "claude/stop-reminded", "cursor/sessionStart", "cursor/beforeSubmitPrompt", "cursor/stop", "cursor/stop-reminded"):
+        print("seen %-26s %s" % (key, seen.get(key, "never (in this store)")))
     print("note Gemini/Antigravity/Codex have no hooks: confirm once per tool that a new chat quotes the protocol.")
 
 

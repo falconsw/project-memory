@@ -33,8 +33,8 @@ If the project dir is missing, create it automatically. No approval, no pause, n
 
 ## Write (after meaningful work, unprompted)
 
-1. `bin/note.py --now --task ... --state ... --next ... --files ...` (or `--now --done`). A Stop hook asks once if code changed and NOW was not refreshed.
-2. If a feature changed or a decision/pitfall appeared: `bin/note.py <topic> --status ... --summary ... --keys ...`, then edit `features/<topic>.md` (3–8 bullets). `note.py` stamps `Updated: date — agent @ commit` and keeps exactly one INDEX row.
+1. `bin/note.py --now --agent "<IDE>" --task ... --state ... --next ... --files ...` (or `--now --done`). It prints which topics list those files as key files. A Stop hook asks once if code changed, or a commit landed, after the last NOW.
+2. If a feature was added, a lasting decision/pitfall appeared, or you touched a topic's key files: `bin/note.py <topic> --agent "<IDE>" --status ... --summary ... --keys ...`, then edit `features/<topic>.md` (3–8 bullets). `note.py` stamps `Updated: date — agent @ commit` and keeps exactly one INDEX row.
 3. Housekeeping: `bin/note.py --archive` moves `done` rows older than 30 days out of INDEX; `bin/doctor.py` flags oversize files, dead key files and notes whose files changed since their commit.
 
 Do **not** dump chat transcripts. The goal is fewer tokens next session, not a diary. Budgets: INDEX ≤ 40 rows / 3500 chars, note ≤ 8 bullets / 1800 chars, NOW ≤ 1500 chars.

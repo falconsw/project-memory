@@ -45,7 +45,10 @@ def main() -> int:
         if not again and os.path.isfile(stamp):
             now = os.path.join(dest, "NOW.md")
             floor = max(os.path.getmtime(stamp), os.path.getmtime(now) if os.path.isfile(now) else 0)
-            if any(m > floor for m in changed_mtimes(cwd)):
+            # Either files were edited after the last handoff, or a commit landed after it
+            # (NOW would still say "uncommitted").
+            committed = c.git(cwd, "log", "-1", "--format=%ct")
+            if any(m > floor for m in changed_mtimes(cwd)) or (committed.isdigit() and float(committed) > floor):
                 reply = (
                     "Memory handoff missing: run `%s --now --task \"...\" --state \"...\" --next \"...\" --files a,b` "
                     "(and `note.py <topic> --summary ...` if a feature changed), then stop. Keep it to a few lines."
@@ -53,6 +56,11 @@ def main() -> int:
                 )
     except Exception:  # a hook must never break the IDE
         reply = ""
+    who = "cursor" if mode == "--cursor" else "claude"
+    try:
+        c.mark_seen(c.store_root(), who + "/stop-reminded" if reply else who + "/stop")
+    except Exception:
+        pass
     if mode == "--cursor":
         out = {"followup_message": reply} if reply else {}
     else:

@@ -174,6 +174,45 @@ class FlowTests(Sandbox):
         self.run_py(self.bin("note.py"), "--now", "--task", "edit a", cwd=self.proj)
         self.assertEqual(self.stop(), {})
 
+    def test_now_reports_related_topics_and_agent(self):
+        self.run_py(self.bin("note.py"), "pay", "--summary", "payments", cwd=self.proj)
+        note = os.path.join(self.store, "projects", "shop", "features", "pay.md")
+        with open(note) as fh:
+            body = fh.read()
+        with open(note, "w") as fh:
+            fh.write(body.replace("`path/to/file`", "`src/pay.py`"))
+        out = self.run_py(self.bin("note.py"), "--now", "--task", "t", "--files", "src/pay.py", "--agent", "Antigravity", cwd=self.proj).stdout
+        self.assertIn("Topics whose key files you touched: pay", out)
+        out = self.run_py(self.bin("note.py"), "--now", "--task", "t", "--files", "other.py", "--agent", "Antigravity", cwd=self.proj).stdout
+        self.assertIn("No topic lists these files", out)
+        with open(os.path.join(self.store, "projects", "shop", "NOW.md")) as fh:
+            self.assertIn("— Antigravity @", fh.read())
+
+    def test_old_style_key_files_heading_is_understood(self):
+        sys.path.insert(0, os.path.join(REPO, "bin"))
+        import aimem_common as c
+        text = "# X\n\n## Key files\n\n- `ios/Podfile`\n- `a/b.swift` (app)\n\n## Decisions\n- `not/this.py`\n"
+        self.assertEqual(c.key_files(text), ["ios/Podfile", "a/b.swift"])
+
+    def test_stop_hook_nags_after_a_later_commit_and_status_shows_seen(self):
+        self.run_py(self.bin("ensure-project.py"), "--hook-claude", cwd=self.proj, stdin=json.dumps({"cwd": self.proj}))
+        self.run_py(self.bin("note.py"), "--now", "--task", "x", cwd=self.proj)
+        self.assertEqual(self.stop(), {})
+        time.sleep(1.1)
+        open(os.path.join(self.proj, "a.py"), "w").write("x=3\n")
+        self.git(self.proj, "commit", "-qam", "later")
+        self.assertEqual(self.stop()["decision"], "block")
+        # commit-only case: nothing edited after the handoff, but a commit landed
+        self.run_py(self.bin("note.py"), "--now", "--task", "y", cwd=self.proj)
+        self.assertEqual(self.stop(), {})
+        time.sleep(1.1)
+        self.git(self.proj, "commit", "-q", "--allow-empty", "-m", "empty")
+        self.assertEqual(self.stop()["decision"], "block")
+        out = self.run_py(self.bin("doctor.py"), "--check-ides", "--slug", "shop", check=False).stdout
+        self.assertRegex(out, r"seen claude/session-start\s+\d{4}-")
+        self.assertRegex(out, r"seen claude/stop-reminded\s+\d{4}-")
+        self.assertIn("never", out)
+
     def test_doctor_budget_drift_and_tokens(self):
         self.run_py(self.bin("note.py"), "pay", cwd=self.proj)
         note = os.path.join(self.store, "projects", "shop", "features", "pay.md")

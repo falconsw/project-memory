@@ -45,8 +45,10 @@ def main() -> int:
         try:
             # The Stop hook only nags about edits made after the session began.
             event = str(hook.get("hook_event_name", ""))
-            if mode == "--hook-claude" or event.lower() == "sessionstart":
+            starting = mode == "--hook-claude" or event.lower() == "sessionstart"
+            if starting:
                 c.write(os.path.join(dest, STAMP), c.today() + "\n")
+            c.mark_seen(root, "claude/session-start" if mode == "--hook-claude" else "cursor/" + (event or "unknown"))
             context = c.session_context(root, dest)
         except OSError:
             context = ""

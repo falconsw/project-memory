@@ -30,6 +30,18 @@ UPDATED_LINE = re.compile(r"^Updated:.*$", re.M)
 UPDATED_DATE = re.compile(r"Updated:?\**\s*:?\s*(\d{4}-\d{2}-\d{2})")
 
 
+def default_agent() -> str:
+    """Best guess when the agent did not pass --agent (env set by the host tool)."""
+    env = os.environ
+    if env.get("AI_MEMORY_AGENT"):
+        return env["AI_MEMORY_AGENT"]
+    if env.get("CLAUDECODE"):
+        return "Claude Code"
+    if env.get("CURSOR_AGENT") or env.get("CURSOR_TRACE_ID"):
+        return "Cursor"
+    return "agent"
+
+
 def stamp(agent: str, cwd: str) -> str:
     commit = c.git(cwd, "rev-parse", "--short", "HEAD")
     return "Updated: %s — %s%s" % (c.today(), agent, " @ " + commit if commit else "")
@@ -80,6 +92,13 @@ def write_now(a, dest: str, cwd: str) -> str:
     fields = (("Task", a.task), ("State", a.state), ("Next", a.next), ("Files", a.files), ("Open", a.open))
     body = "\n".join("- %s: %s" % (k, v.strip()) for k, v in fields if v)
     c.write(path, "# Now\n\n%s\n\n%s\n" % (stamp(a.agent, cwd), body))
+    files = [f for f in a.files.replace(";", ",").split(",") if f.strip()]
+    if files:
+        related = c.related_topics(dest, files)
+        if related:
+            print("Topics whose key files you touched: %s. If you made a decision or found a pitfall, update with: note.py <topic> --agent ..." % ", ".join(related))
+        else:
+            print("No topic lists these files. If this was a new feature or a lasting decision, create one: note.py <new-topic> --summary ... --keys ... --agent ...")
     return path
 
 
@@ -112,7 +131,7 @@ def main() -> int:
     p.add_argument("--status", default="wip", choices=STATUSES)
     p.add_argument("--summary", default="")
     p.add_argument("--keys", default="")
-    p.add_argument("--agent", default=os.environ.get("AI_MEMORY_AGENT", "agent"))
+    p.add_argument("--agent", default=default_agent(), help="your IDE/agent name, e.g. \"Antigravity\"")
     p.add_argument("--now", action="store_true")
     p.add_argument("--done", action="store_true")
     for f in ("task", "state", "next", "files", "open"):
@@ -120,6 +139,8 @@ def main() -> int:
     p.add_argument("--archive", action="store_true")
     p.add_argument("--days", type=int, default=30)
     a = p.parse_args()
+    if a.agent == "agent":
+        sys.stderr.write("note: pass --agent \"<your IDE name>\" so the next IDE knows who wrote this\n")
 
     root = c.store_root()
     cwd = os.environ.get("AI_MEMORY_CWD") or os.getcwd()

@@ -295,5 +295,69 @@ def session_context(store: str, dest: str) -> str:
     return "\n".join(parts)
 
 
+KEY_FILES_RE = re.compile(r"(?i)key files?\b")
+TICKS_RE = re.compile(r"`([^`\s]+)`")
+
+
+def key_files(text: str) -> list[str]:
+    """Paths in a note's `Key files` line, or in the bullet list under a `## Key files` heading."""
+    lines = text.splitlines()
+    for i, line in enumerate(lines):
+        if not KEY_FILES_RE.search(line):
+            continue
+        found = TICKS_RE.findall(line)
+        if not found:
+            for nxt in lines[i + 1:]:
+                if nxt.startswith("#"):
+                    break
+                found += TICKS_RE.findall(nxt)
+        return [f for f in found if "/" in f or "." in f]
+    return []
+
+
+def related_topics(dest: str, files: list[str]) -> list[str]:
+    """Topics whose `Key files` overlap `files` (exact path, or same basename)."""
+    wanted = {f.strip() for f in files if f.strip()}
+    names = {os.path.basename(f) for f in wanted}
+    feats = os.path.join(dest, "features")
+    out = []
+    for row in index_rows(read(os.path.join(dest, "INDEX.md"))) if os.path.isfile(os.path.join(dest, "INDEX.md")) else []:
+        topic = row[0].strip("` ")
+        note = os.path.join(feats, topic + ".md")
+        if not os.path.isfile(note):
+            continue
+        for f in key_files(read(note)):
+            f = f.split("(")[0].rstrip(",")
+            if f in wanted or os.path.basename(f) in names or any(w.endswith("/" + f) or f.endswith("/" + w) for w in wanted):
+                out.append(topic)
+                break
+    return out
+
+
+def mark_seen(store: str, key: str) -> None:
+    """Record that a hook fired (`status` shows it), so a silently dead hook is noticeable. Best effort."""
+    path = os.path.join(store, ".hooks-seen.json")
+    try:
+        with lock(path, timeout=1.0):
+            try:
+                data = json.loads(read(path))
+            except (OSError, ValueError):
+                data = {}
+            if not isinstance(data, dict):
+                data = {}
+            data[key] = _dt.datetime.now().strftime("%Y-%m-%d %H:%M")
+            write(path, json.dumps(data, indent=1, sort_keys=True) + "\n")
+    except OSError:
+        pass
+
+
+def read_seen(store: str) -> dict:
+    try:
+        data = json.loads(read(os.path.join(store, ".hooks-seen.json")))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
 def approx_tokens(text: str) -> int:
     return (len(text) + 3) // 4
