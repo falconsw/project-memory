@@ -1,0 +1,57 @@
+#!/usr/bin/env python3
+"""project-memory: one command for setup, handoff notes and health checks.
+
+  project-memory install [--yes] [--dry-run] [--claude --cursor --gemini --codex | --all] [--store-only]
+  project-memory uninstall [--yes] [--dry-run]     remove IDE wiring; notes stay
+  project-memory status                             what is wired where, and tokens injected per project
+  project-memory doctor [--slug S] [...]            check notes (size, secrets, stale, dead files)
+  project-memory now --task ... --next ...          write the NOW.md handoff (or: now --done)
+  project-memory note <topic> --summary ...         create/refresh a feature note + INDEX row
+  project-memory archive [--days 30]                move old `done` INDEX rows out of INDEX.md
+"""
+from __future__ import annotations
+
+import os
+import sys
+
+HERE = os.path.dirname(os.path.realpath(__file__))
+ROUTES = {
+    "install": ("install.py", []),
+    "uninstall": ("install.py", ["--uninstall"]),
+    "status": ("doctor.py", ["--check-ides", "--tokens"]),
+    "doctor": ("doctor.py", []),
+    "now": ("note.py", ["--now"]),
+    "note": ("note.py", []),
+    "archive": ("note.py", ["--archive"]),
+}
+
+
+def script_path(name: str) -> str:
+    """install.py needs the repo (templates); a store copy finds it via the `.repo` file written at install."""
+    path = os.path.join(HERE, name)
+    if name != "install.py" or os.path.isdir(os.path.join(os.path.dirname(HERE), "templates")):
+        return path
+    try:
+        with open(os.path.join(os.path.dirname(HERE), ".repo"), encoding="utf-8") as fh:
+            repo = fh.read().strip()
+    except OSError:
+        return path
+    return os.path.join(repo, "bin", name) if os.path.isfile(os.path.join(repo, "bin", name)) else path
+
+
+def main() -> int:
+    cmd = sys.argv[1] if len(sys.argv) > 1 else ""
+    if cmd not in ROUTES:
+        print(__doc__.strip())
+        return 0 if cmd in ("", "-h", "--help", "help") else 2
+    script, pre = ROUTES[cmd]
+    target = script_path(script)
+    if not os.path.isfile(target):
+        sys.stderr.write("project-memory: %s not found; run it from the cloned repo\n" % script)
+        return 1
+    os.execv(sys.executable, [sys.executable, target] + pre + sys.argv[2:])
+    return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

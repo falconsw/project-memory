@@ -2,7 +2,7 @@
 
 Slug: `{{SLUG}}`
 
-| Topic | Status | Note |
-| --- | --- | --- |
+| Topic | Status | Note | Keys |
+| --- | --- | --- | --- |
 
 Status: `done` / `wip` / `blocked`
