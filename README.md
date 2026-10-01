@@ -96,6 +96,11 @@ One real hand-off, Claude Code → Antigravity, on an unrelated project (2026-10
 1. **Claude Code**: started a task in an area no earlier session had touched ("add a border between the rows of the Market card"). When it finished it ran `note.py --now --task ... --state ...`, which wrote the project's `NOW.md`.
 2. **Antigravity**: in a brand-new chat, the user asked a follow-up about the same area ("we added the borders, but there is no room above Add Symbol"). Its first moves were reading `INDEX.md` and `NOW.md` from the store (visible in its activity log), before opening any code.
 
+| Claude Code | Antigravity |
+| --- | --- |
+| ![Claude Code runs note.py --now and writes NOW.md](docs/images/handoff-1-claude-writes-now.png) | ![Antigravity thread: the request](docs/images/handoff-4-original-request.png) |
+| ![Claude Code edits NOW.md](docs/images/handoff-2-claude-now-edited.png) | ![Antigravity reads INDEX.md and NOW.md first](docs/images/handoff-3-antigravity-reads-index-now.png) |
+
 What this shows: the handoff file written by one IDE is the first thing the other IDE reads, with no user prompting and no `git log`. What it does not show: whether the follow-up fix was correct, or how many tokens were saved; measure with `project-memory status` (tokens injected per project) and compare a session with and without the store.
 
 ## Known limitations
