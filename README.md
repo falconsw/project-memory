@@ -94,12 +94,12 @@ The store is personal by default. To share one project's notes, make `projects/<
 One real hand-off, Claude Code → Antigravity, on an unrelated project (2026-10-01):
 
 1. **Claude Code**: started a task in an area no earlier session had touched ("add a border between the rows of the Market card"). When it finished it ran `note.py --now --task ... --state ...`, which wrote the project's `NOW.md`.
-2. **Antigravity**: in a brand-new chat, the user asked a follow-up about the same area ("we added the borders, but there is no room above Add Symbol"). Its first moves were reading `INDEX.md` and `NOW.md` from the store (visible in its activity log), before opening any code.
+2. **Antigravity**: in a brand-new chat, the user asked a follow-up about the same area ("we added the borders, but there is no room above Add Symbol"). Its first moves were reading `INDEX.md` and `NOW.md` from the store (visible in its activity log), before opening any code. When done it wrote its own handoff with the same `note.py --now` command, so the next IDE can continue from it.
 
 | Claude Code | Antigravity |
 | --- | --- |
-| ![Claude Code runs note.py --now and writes NOW.md](docs/images/handoff-1-claude-writes-now.png) | ![Antigravity thread: the request](docs/images/handoff-4-original-request.png) |
-| ![Claude Code edits NOW.md](docs/images/handoff-2-claude-now-edited.png) | ![Antigravity reads INDEX.md and NOW.md first](docs/images/handoff-3-antigravity-reads-index-now.png) |
+| 1. The original request ![Claude Code: the request](docs/images/1-claude-request.png) | 3. New chat, follow-up about the same area: reads `INDEX.md` and `NOW.md` first ![Antigravity reads INDEX.md and NOW.md](docs/images/3-antigravity-reads-index-now.png) |
+| 2. Finishes and writes the handoff with `note.py --now` ![Claude Code writes NOW.md](docs/images/2-claude-writes-now.png) | 4. Finishes and updates `NOW.md` the same way ![Antigravity writes NOW.md](docs/images/4-antigravity-writes-now.png) |
 
 What this shows: the handoff file written by one IDE is the first thing the other IDE reads, with no user prompting and no `git log`. What it does not show: whether the follow-up fix was correct, or how many tokens were saved; measure with `project-memory status` (tokens injected per project) and compare a session with and without the store.
 
