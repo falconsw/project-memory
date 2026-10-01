@@ -89,6 +89,15 @@ The store is personal by default. To share one project's notes, make `projects/<
 
 `integrations/openmemory/` contains a launcher and an MCP config example for search across notes. Markdown stays the source of truth.
 
+## Tested in practice
+
+One real hand-off, Claude Code → Antigravity, on an unrelated project (2026-10-01):
+
+1. **Claude Code**: started a task in an area no earlier session had touched ("add a border between the rows of the Market card"). When it finished it ran `note.py --now --task ... --state ...`, which wrote the project's `NOW.md`.
+2. **Antigravity**: in a brand-new chat, the user asked a follow-up about the same area ("we added the borders, but there is no room above Add Symbol"). Its first moves were reading `INDEX.md` and `NOW.md` from the store (visible in its activity log), before opening any code.
+
+What this shows: the handoff file written by one IDE is the first thing the other IDE reads, with no user prompting and no `git log`. What it does not show: whether the follow-up fix was correct, or how many tokens were saved; measure with `project-memory status` (tokens injected per project) and compare a session with and without the store.
+
 ## Known limitations
 
 - Gemini CLI, Antigravity and Codex have no hooks: they only get the rule block and run `ensure-project.sh` themselves. `doctor.py --check-ides` shows what is wired, but only a new chat quoting the protocol proves a tool really loads its rule file.
@@ -99,4 +108,4 @@ The store is personal by default. To share one project's notes, make `projects/<
 
 ## Türkçe özet
 
-Yapay zeka kod asistanları (Claude Code, Cursor, Antigravity/Gemini, Codex) için ortak, yerel, Markdown tabanlı proje hafızası. Bir araçta yaptığınız iş, diğerinde kodu baştan taramadan bilinir. Oturum başında `NOW.md` (nerede kaldım) ve `INDEX.md` bağlama otomatik enjekte edilir, ajan sıfır tool çağrısıyla devam eder. Kurulum: `bin/project-memory install` (IDE'leri kendisi bulur, planı gösterir, onay ister); doğrulama: `project-memory status`; kaldırma: `project-memory uninstall`. Notlarınız `~/ai-memory/projects/` altında kalır ve bu repoya girmez.
+Yapay zeka kod asistanları (Claude Code, Cursor, Antigravity/Gemini, Codex) için ortak, yerel, Markdown tabanlı proje hafızası. Bir araçta yaptığınız iş, diğerinde kodu baştan taramadan bilinir. Oturum başında `NOW.md` (nerede kaldım) ve `INDEX.md` bağlama otomatik enjekte edilir, ajan sıfır tool çağrısıyla devam eder. Kurulum: `bin/project-memory install` (IDE'leri kendisi bulur, planı gösterir, onay ister); doğrulama: `project-memory status`; kaldırma: `project-memory uninstall`. Claude Code'dan Antigravity'ye gerçek bir devir testi yapıldı: Antigravity yeni sohbette önce `INDEX.md` ve `NOW.md`'yi okudu (README'deki "Tested in practice"). Notlarınız `~/ai-memory/projects/` altında kalır ve bu repoya girmez.
