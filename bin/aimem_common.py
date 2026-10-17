@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import time
 
+__version__ = "0.1.0"
 SLUG_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 TOPIC_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 RESERVED_SLUGS = {"_template", ".", ".."}
@@ -258,7 +259,7 @@ def render_index(pre: list[str], rows: list[list[str]], post: list[str]) -> str:
 # -- session context -----------------------------------------------------
 
 
-def compact(text: str, budget: int) -> str:
+def compact(text: str, budget: int, more: str = "run note.py --archive") -> str:
     """Drop blank lines, boilerplate and table separators; cut to `budget` chars."""
     keep = []
     for line in text.splitlines():
@@ -269,7 +270,7 @@ def compact(text: str, budget: int) -> str:
             continue
         keep.append(s)
     out = "\n".join(keep)
-    return out if len(out) <= budget else out[:budget].rsplit("\n", 1)[0] + "\n… (truncated; run note.py --archive)"
+    return out if len(out) <= budget else out[:budget].rsplit("\n", 1)[0] + "\n… (truncated; %s)" % more
 
 
 def now_is_empty(text: str) -> bool:
@@ -332,6 +333,116 @@ def related_topics(dest: str, files: list[str]) -> list[str]:
                 out.append(topic)
                 break
     return out
+
+
+# -- prompt topics (UserPromptSubmit hook) ---------------------------------
+
+PROMPT_MIN_CHARS = 8
+PROMPT_TOPICS_MAX = 2
+PROMPT_NOTE_BUDGET_CHARS = 2500
+PROMPT_SEEN = ".prompt-topics.json"
+PROMPT_SEEN_SESSIONS = 20
+NOTE_REF_RE = re.compile(r"features/([a-z0-9][a-z0-9-]*)\.md")
+WORD_RE = re.compile(r"[\w./-]+")
+PLACEHOLDER_KEYS = {"path/to/file", "words", "files"}
+
+
+def _norm(text: str) -> str:
+    # Turkish capital dotted I lowercases to "i" + a combining dot; fold it to a plain "i".
+    return text.replace("İ", "i").lower()
+
+
+def row_topic(row: list[str]) -> str:
+    """The note an INDEX row points at: a `features/<x>.md` link in any cell, else the topic cell."""
+    refs = NOTE_REF_RE.findall(" ".join(row))
+    return refs[0] if refs else row[0].strip("` ")
+
+
+def topic_terms(row: list[str], note_text: str) -> dict[str, int]:
+    """Search terms of one topic with weights: Keys and the note's key files 2, topic-name parts 1."""
+    topic = row_topic(row)
+    terms = {}
+    for part in topic.split("-"):
+        if len(part) >= 4:
+            terms[part] = 1
+    terms[topic] = 2
+    keys = row[3].split(",") if len(row) > 3 else []
+    for raw in keys + [f.split("(")[0] for f in key_files(note_text)]:
+        term = _norm(raw.strip(" `'\"")).strip("./-")
+        if len(term) >= 2 and term not in PLACEHOLDER_KEYS:
+            terms[term] = 2
+    return terms
+
+
+def _term_hit(term: str, words: list[str], text: str) -> bool:
+    if " " in term:
+        return term in text
+    if "/" in term:
+        base = term.rsplit("/", 1)[-1]
+        return any(w == term or w.rsplit("/", 1)[-1] == base for w in words)
+    # Prefix match lets suffixes through ("sepet" hits "sepetteki", "release" hits "releases").
+    return any(w == term or w.rsplit("/", 1)[-1] == term or (len(term) >= 5 and w.startswith(term)) for w in words)
+
+
+def match_topics(dest: str, prompt: str, skip: "set | None" = None, limit: int = PROMPT_TOPICS_MAX) -> list[str]:
+    """Topics whose keys, key files or name appear in `prompt`, best first. Plain keyword overlap: no model."""
+    index = os.path.join(dest, "INDEX.md")
+    if not os.path.isfile(index):
+        return []
+    text = _norm(prompt)
+    words = [w for w in (w.strip("./-") for w in WORD_RE.findall(text)) if w]
+    scored = []
+    for pos, row in enumerate(index_rows(read(index))):
+        topic = row_topic(row)
+        note = os.path.join(dest, "features", topic + ".md")
+        if (skip and topic in skip) or not TOPIC_RE.match(topic) or not os.path.isfile(note):
+            continue
+        score = sum(w for t, w in topic_terms(row, read(note)).items() if _term_hit(t, words, text))
+        if score >= 2:
+            scored.append((-score, pos, topic))
+    return [t for _, _, t in sorted(scored)[:limit]]
+
+
+def prompt_context(dest: str, topics: list[str]) -> str:
+    parts = ["project-memory: feature notes matching this prompt (already loaded: do not re-read them)."]
+    for topic in topics:
+        body = compact(read(os.path.join(dest, "features", topic + ".md")), PROMPT_NOTE_BUDGET_CHARS, "open the note for the rest")
+        parts.append("features/%s.md:\n%s" % (topic, body))
+    return "\n".join(parts)
+
+
+def _load_prompt_seen(path: str) -> dict:
+    try:
+        data = json.loads(read(path))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def prompt_seen(dest: str, session: str) -> list[str]:
+    """Topics the prompt hook already injected in `session`."""
+    entry = _load_prompt_seen(os.path.join(dest, PROMPT_SEEN)).get(session)
+    return list(entry.get("topics", [])) if isinstance(entry, dict) else []
+
+
+def remember_prompt_topics(dest: str, session: str, topics: "list[str] | None") -> None:
+    """Add `topics` to `session`'s injected set; None forgets the session (SessionStart, also after /compact). Best effort."""
+    path = os.path.join(dest, PROMPT_SEEN)
+    try:
+        with lock(path, timeout=1.0):
+            data = _load_prompt_seen(path)
+            if topics is None:
+                if data.pop(session, None) is None:
+                    return
+            else:
+                old = data.get(session, {}).get("topics", []) if isinstance(data.get(session), dict) else []
+                data[session] = {"topics": old + [t for t in topics if t not in old], "t": int(time.time())}
+                recent = sorted(data, key=lambda k: data[k].get("t", 0) if isinstance(data[k], dict) else 0)
+                for k in recent[:-PROMPT_SEEN_SESSIONS]:
+                    del data[k]
+            write(path, json.dumps(data, indent=1, sort_keys=True) + "\n")
+    except OSError:
+        pass
 
 
 def mark_seen(store: str, key: str) -> None:

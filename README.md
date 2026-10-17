@@ -20,27 +20,39 @@ Shared, local, plain-Markdown memory for AI coding agents. Claude Code, Cursor, 
 
 1. At session start a hook creates `projects/<slug>/` if missing and **injects `NOW.md` + `INDEX.md` into the context**: the agent starts with zero tool calls and ~300–800 tokens.
 2. The agent continues from NOW and opens only the one `features/<topic>.md` that matches. No `git log`, no repo scan.
+   In Claude Code a `UserPromptSubmit` hook does that step for it: when a prompt mentions a topic's keys, one of its key files, or its name, that note (up to two) is injected before the first turn, once per session. Plain keyword match, no model: the same prompt always brings the same notes. Write keys the way you talk about the feature (Turkish words included) so prompts find them. `PROJECT_MEMORY_PROMPT_TOPICS=0` turns it off.
 3. After meaningful work it runs `note.py --now ...` (handoff) and `note.py <topic> ...` (feature note + INDEX row). A Stop hook asks once if code changed but NOW was not refreshed.
 
 Switching IDE mid-task works because NOW says what was being done, what is next, and which files matter.
 
-The full rules are in [PROTOCOL.md](PROTOCOL.md).
+The full rules are in [PROTOCOL.md](https://github.com/falconsw/project-memory/blob/main/PROTOCOL.md).
 
 ## Install
 
 Requires Python 3.9+ (the macOS system `python3` is fine). No dependencies.
 
 ```sh
-git clone https://github.com/falconsw/project-memory ~/code/project-memory
-~/code/project-memory/bin/project-memory install
+uvx ai-project-memory install
 ```
 
-It detects your IDEs (`~/.claude`, `~/.cursor`, `~/.gemini`, `~/.codex`), prints exactly what it will change, and asks `Apply? [Y/n]`. It also links `~/.local/bin/project-memory` when that directory exists, so afterwards just type `project-memory`.
+It copies the scripts into `~/ai-memory`, detects your IDEs (`~/.claude`, `~/.cursor`, `~/.gemini`, `~/.codex`), prints exactly what it will change, and asks `Apply? [Y/n]`. It also links `~/.local/bin/project-memory` when that directory exists, so afterwards just type `project-memory`.
+
+Other ways, same result:
+
+```sh
+pipx install ai-project-memory && project-memory install       # or: uv tool install ai-project-memory
+git clone https://github.com/falconsw/project-memory ~/code/project-memory && ~/code/project-memory/bin/project-memory install
+```
+
+Plain `pip install` works too, but Homebrew Python refuses it (PEP 668, "externally-managed-environment") and the macOS system Python puts the command in a folder that is not on PATH; `uvx` and `pipx` avoid both.
+
+Hooks never run from the package: `install` copies the scripts into the store and every IDE hook calls `python3 ~/ai-memory/bin/...`, so upgrading or removing the package, or uv clearing its cache, cannot break a running IDE. Update with `uvx ai-project-memory@latest install --yes` (pipx: `pipx upgrade ai-project-memory && project-memory install --yes`; clone: `git pull && bin/project-memory install --yes`).
 
 ```sh
 project-memory status        # what is wired where + tokens injected per project
 project-memory uninstall     # remove IDE wiring; your notes stay
 project-memory install --dry-run | --yes | --claude --cursor | --all | --store-only
+project-memory --version
 ```
 
 | Flag | What it wires |
@@ -48,13 +60,11 @@ project-memory install --dry-run | --yes | --claude --cursor | --all | --store-o
 | *(none)* | Every detected IDE, plus the store and the CLI link |
 | `--store-only` | Store only: `PROTOCOL.md`, `bin/`, `projects/_template/`, `USER.md` if missing |
 | `--cursor` | `~/.cursor/rules/project-memory.mdc`, `sessionStart` + `beforeSubmitPrompt` + `stop` hooks |
-| `--claude` | `SessionStart` + `Stop` hooks in `~/.claude/settings.json`, block in `~/.claude/CLAUDE.md` (the old skill is retired: it duplicated the rule) |
+| `--claude` | `SessionStart` + `UserPromptSubmit` + `Stop` hooks in `~/.claude/settings.json`, block in `~/.claude/CLAUDE.md` (the old skill is retired: it duplicated the rule) |
 | `--gemini` | Block in `~/.gemini/GEMINI.md` (Gemini CLI, Antigravity) |
 | `--codex` | Block in `~/.codex/AGENTS.md` |
 
 Without a terminal (CI, scripts) `install` only prints the plan unless you pass `--yes`. Re-running is safe. Notes under `projects/<slug>/` are never touched. Every IDE file is backed up as `<file>.bak-project-memory` before its first change. If a file already has a hand-written memory rule, the installer leaves it alone and says so.
-
-Requires Python 3.9+ (the macOS system `python3` is fine). No dependencies.
 
 Custom store location: `project-memory install --store ~/notes/memory`, then `export PROJECT_MEMORY_HOME=~/notes/memory`. `AI_MEMORY_HOME` is still honoured for older installs.
 
@@ -81,6 +91,10 @@ The slug is the main repo's folder name; subfolders and git worktrees resolve to
 python3 -m unittest discover -s tests   # installs into a throwaway HOME; also runs in CI (3.9 and 3.13)
 ```
 
+## Releasing
+
+Bump `__version__` in `bin/aimem_common.py`, add a `CHANGELOG.md` entry, then tag and push `vX.Y.Z`. `.github/workflows/release.yml` checks that the tag matches the version, runs the tests, builds, and publishes to PyPI through Trusted Publishing (no token in the repo).
+
 ## Sharing notes with a team
 
 The store is personal by default. To share one project's notes, make `projects/<slug>/` a git repo of its own (or a folder inside the project repo and symlink it into the store). Run `doctor.py` before pushing: it flags tokens, keys, and `password=` style lines.
@@ -98,14 +112,15 @@ One real hand-off, Claude Code → Antigravity, on an unrelated project (2026-10
 
 | Claude Code | Antigravity |
 | --- | --- |
-| 1. The original request ![Claude Code: the request](docs/images/1-claude-request.png) | 3. New chat, follow-up about the same area: reads `INDEX.md` and `NOW.md` first ![Antigravity reads INDEX.md and NOW.md](docs/images/3-antigravity-reads-index-now.png) |
-| 2. Finishes and writes the handoff with `note.py --now` ![Claude Code writes NOW.md](docs/images/2-claude-writes-now.png) | 4. Finishes and updates `NOW.md` the same way ![Antigravity writes NOW.md](docs/images/4-antigravity-writes-now.png) |
+| 1. The original request ![Claude Code: the request](https://raw.githubusercontent.com/falconsw/project-memory/main/docs/images/1-claude-request.png) | 3. New chat, follow-up about the same area: reads `INDEX.md` and `NOW.md` first ![Antigravity reads INDEX.md and NOW.md](https://raw.githubusercontent.com/falconsw/project-memory/main/docs/images/3-antigravity-reads-index-now.png) |
+| 2. Finishes and writes the handoff with `note.py --now` ![Claude Code writes NOW.md](https://raw.githubusercontent.com/falconsw/project-memory/main/docs/images/2-claude-writes-now.png) | 4. Finishes and updates `NOW.md` the same way ![Antigravity writes NOW.md](https://raw.githubusercontent.com/falconsw/project-memory/main/docs/images/4-antigravity-writes-now.png) |
 
 What this shows: the handoff file written by one IDE is the first thing the other IDE reads, with no user prompting and no `git log`. What it does not show: whether the follow-up fix was correct, or how many tokens were saved; measure with `project-memory status` (tokens injected per project) and compare a session with and without the store.
 
 ## Known limitations
 
 - Gemini CLI, Antigravity and Codex have no hooks: they only get the rule block and run `ensure-project.sh` themselves. `doctor.py --check-ides` shows what is wired, but only a new chat quoting the protocol proves a tool really loads its rule file.
+- Prompt-time note injection is Claude Code only: Cursor's `beforeSubmitPrompt` hook can block a prompt but cannot add context to it.
 - The Stop hook relies on each IDE's hook API (Claude Code `Stop`, Cursor `stop`); the Cursor one is untested against a live Cursor.
 - Following the protocol on the write side still depends on the agent; the Stop hook is a safety net, not a guarantee.
 
@@ -113,4 +128,4 @@ What this shows: the handoff file written by one IDE is the first thing the othe
 
 ## Türkçe özet
 
-Yapay zeka kod asistanları (Claude Code, Cursor, Antigravity/Gemini, Codex) için ortak, yerel, Markdown tabanlı proje hafızası. Bir araçta yaptığınız iş, diğerinde kodu baştan taramadan bilinir. Oturum başında `NOW.md` (nerede kaldım) ve `INDEX.md` bağlama otomatik enjekte edilir, ajan sıfır tool çağrısıyla devam eder. Kurulum: `bin/project-memory install` (IDE'leri kendisi bulur, planı gösterir, onay ister); doğrulama: `project-memory status`; kaldırma: `project-memory uninstall`. Claude Code'dan Antigravity'ye gerçek bir devir testi yapıldı: Antigravity yeni sohbette önce `INDEX.md` ve `NOW.md`'yi okudu (README'deki "Tested in practice"). Notlarınız `~/ai-memory/projects/` altında kalır ve bu repoya girmez.
+Yapay zeka kod asistanları (Claude Code, Cursor, Antigravity/Gemini, Codex) için ortak, yerel, Markdown tabanlı proje hafızası. Bir araçta yaptığınız iş, diğerinde kodu baştan taramadan bilinir. Oturum başında `NOW.md` (nerede kaldım) ve `INDEX.md` bağlama otomatik enjekte edilir, ajan sıfır tool çağrısıyla devam eder. Claude Code'da prompt'unuz bir topic'in anahtar kelimesini veya dosyasını anarsa o not ilk turdan önce otomatik eklenir (oturum başına bir kez). Kurulum: `uvx ai-project-memory install` (veya `pipx install ai-project-memory`, ya da repo'yu klonlayıp `bin/project-memory install`; IDE'leri kendisi bulur, planı gösterir, onay ister); doğrulama: `project-memory status`; kaldırma: `project-memory uninstall`. Claude Code'dan Antigravity'ye gerçek bir devir testi yapıldı: Antigravity yeni sohbette önce `INDEX.md` ve `NOW.md`'yi okudu (README'deki "Tested in practice"). Notlarınız `~/ai-memory/projects/` altında kalır ve bu repoya girmez.

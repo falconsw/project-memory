@@ -8,6 +8,7 @@
   project-memory now --task ... --next ...          write the NOW.md handoff (or: now --done)
   project-memory note <topic> --summary ...         create/refresh a feature note + INDEX row
   project-memory archive [--days 30]                move old `done` INDEX rows out of INDEX.md
+  project-memory --version
 """
 from __future__ import annotations
 
@@ -41,6 +42,12 @@ def script_path(name: str) -> str:
 
 def main() -> int:
     cmd = sys.argv[1] if len(sys.argv) > 1 else ""
+    if cmd in ("--version", "-V", "version"):
+        sys.path.insert(0, HERE)
+        import aimem_common
+
+        print("project-memory %s (%s)" % (aimem_common.__version__, HERE))
+        return 0
     if cmd not in ROUTES:
         print(__doc__.strip())
         return 0 if cmd in ("", "-h", "--help", "help") else 2

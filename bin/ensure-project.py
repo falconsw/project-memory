@@ -48,6 +48,9 @@ def main() -> int:
             starting = mode == "--hook-claude" or event.lower() == "sessionstart"
             if starting:
                 c.write(os.path.join(dest, STAMP), c.today() + "\n")
+            if mode == "--hook-claude" and hook.get("session_id"):
+                # After /compact or /clear the injected notes are gone from context; let the prompt hook resend them.
+                c.remember_prompt_topics(dest, str(hook["session_id"]), None)
             c.mark_seen(root, "claude/session-start" if mode == "--hook-claude" else "cursor/" + (event or "unknown"))
             context = c.session_context(root, dest)
         except OSError:

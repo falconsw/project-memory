@@ -1,0 +1,64 @@
+name: release
+
+# Push a tag `vX.Y.Z` to publish. aimem_common.__version__ is the single source of truth; the tag
+# must match it. PyPI upload uses Trusted Publishing, so no API token is stored in the repo.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Tag must match the package version
+        run: |
+          pkg="$(python -c "import sys; sys.path.insert(0, 'bin'); import aimem_common; print(aimem_common.__version__)")"
+          if [ "${GITHUB_REF_NAME#v}" != "$pkg" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match aimem_common.__version__ ($pkg)"
+            exit 1
+          fi
+      - run: python -m unittest discover -s tests
+      - run: pip install build twine
+      - run: python -m build
+      - run: twine check dist/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  pypi:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/ai-project-memory
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+
+  github-release:
+    needs: pypi
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
