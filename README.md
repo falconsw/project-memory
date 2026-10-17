@@ -93,7 +93,7 @@ python3 -m unittest discover -s tests   # installs into a throwaway HOME; also r
 
 ## Releasing
 
-Bump `__version__` in `bin/aimem_common.py`, add a `CHANGELOG.md` entry, then tag and push `vX.Y.Z`. `.github/workflows/release.yml` checks that the tag matches the version, runs the tests, builds, and publishes to PyPI through Trusted Publishing (no token in the repo).
+Bump `__version__` in `bin/aimem_common.py`, add a `CHANGELOG.md` entry, then tag and push `vX.Y.Z`. `.github/workflows/release.yml` checks that the tag matches the version, runs the tests, builds, and publishes to PyPI through Trusted Publishing (or the `PYPI_API_TOKEN` repo secret when it is set).
 
 ## Sharing notes with a team
 
@@ -123,6 +123,10 @@ What this shows: the handoff file written by one IDE is the first thing the othe
 - Prompt-time note injection is Claude Code only: Cursor's `beforeSubmitPrompt` hook can block a prompt but cannot add context to it.
 - The Stop hook relies on each IDE's hook API (Claude Code `Stop`, Cursor `stop`); the Cursor one is untested against a live Cursor.
 - Following the protocol on the write side still depends on the agent; the Stop hook is a safety net, not a guarantee.
+
+## License
+
+MIT, see [LICENSE](https://github.com/falconsw/project-memory/blob/main/LICENSE).
 
 ---
 

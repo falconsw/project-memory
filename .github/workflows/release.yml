@@ -1,7 +1,7 @@
 name: release
 
 # Push a tag `vX.Y.Z` to publish. aimem_common.__version__ is the single source of truth; the tag
-# must match it. PyPI upload uses Trusted Publishing, so no API token is stored in the repo.
+# must match it. PyPI upload uses Trusted Publishing, or the PYPI_API_TOKEN secret when it is set.
 on:
   push:
     tags: ["v*"]
@@ -47,6 +47,9 @@ jobs:
           name: dist
           path: dist/
       - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          # Empty unless the PYPI_API_TOKEN secret is set; empty means Trusted Publishing.
+          password: ${{ secrets.PYPI_API_TOKEN }}
 
   github-release:
     needs: pypi
