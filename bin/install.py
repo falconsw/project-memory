@@ -119,7 +119,8 @@ class Installer:
                 os.chmod(dest, os.stat(dest).st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
         tpl_src = os.path.join(REPO, "templates", "project")
         tpl_dest = os.path.join(self.store, "projects", "_template")
-        for dirpath, _, files in os.walk(tpl_src):
+        for dirpath, dirs, files in os.walk(tpl_src):
+            dirs[:] = [d for d in dirs if d != "__pycache__"]  # pip byte-compiles installed .py files
             for f in files:
                 src = os.path.join(dirpath, f)
                 rel = os.path.relpath(src, tpl_src)
@@ -129,7 +130,8 @@ class Installer:
             self.put(user, c.read(os.path.join(REPO, "templates", "USER.md")))
         self.put(os.path.join(self.store, ".repo"), REPO + "\n", backup=False)
         integrations = os.path.join(REPO, "integrations")
-        for dirpath, _, files in os.walk(integrations):
+        for dirpath, dirs, files in os.walk(integrations):
+            dirs[:] = [d for d in dirs if d != "__pycache__"]  # pip byte-compiles installed .py files
             for f in files:
                 src = os.path.join(dirpath, f)
                 rel = os.path.relpath(src, REPO)

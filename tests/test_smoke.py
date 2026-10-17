@@ -113,6 +113,17 @@ class InstallTests(Sandbox):
         self.install("--store-only")
         self.assertEqual(os.readlink(os.path.join(bindir, "project-memory")), packaged)
 
+    def test_install_skips_bytecode_pip_writes_next_to_package_files(self):
+        import shutil
+        copy = os.path.join(self.home, "site-packages", "project_memory")
+        shutil.copytree(REPO, copy, ignore=shutil.ignore_patterns(".git", "docs"))
+        for sub in ("integrations/openmemory", "templates/project"):
+            os.makedirs(os.path.join(copy, sub, "__pycache__"))
+            open(os.path.join(copy, sub, "__pycache__", "x.cpython-313.pyc"), "wb").write(b"\xf3\r\r\n\x00")
+        self.run_py(os.path.join(copy, "bin", "install.py"), "--yes", "--store", self.store, "--store-only")
+        self.assertTrue(os.path.isfile(os.path.join(self.store, "integrations", "openmemory", "openmemory-mcp.py")))
+        self.assertFalse(os.path.exists(os.path.join(self.store, "integrations", "openmemory", "__pycache__")))
+
     def test_without_terminal_or_yes_nothing_changes(self):
         p = self.run_py(os.path.join(REPO, "bin", "install.py"), "--store", self.store, "--all", check=False)
         self.assertEqual(p.returncode, 1)
