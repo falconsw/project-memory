@@ -26,7 +26,7 @@ If the project dir is missing, create it automatically. No approval, no pause, n
 ## Read (every conversation, before exploring code)
 
 1. If NOW/INDEX are already in context, do not re-read them. Skim `USER.md` only when cross-project preferences matter.
-2. Continue from NOW. If the task matches an INDEX row (topic, summary or keys), read only that `features/<topic>.md`.
+2. Continue from NOW. If the task matches an INDEX row (topic, summary or keys), read only that `features/<topic>.md`. If a `project-memory:` block already carries that note (Claude Code injects notes whose keys the prompt mentions), do not re-read it.
 3. If the note is enough, do **not** run `git log`, `git status`, `git grep`, or broad code search. Open only the files the note lists.
 4. Use git and search only when INDEX has no matching topic.
 5. If the note and the code disagree, trust the code and fix the note.

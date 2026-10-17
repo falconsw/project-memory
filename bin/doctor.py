@@ -37,7 +37,7 @@ SECRET_PATTERNS = [
     ("assignment", re.compile(r"(?i)\b(password|passwd|secret|api[_-]?key|token)\s*[:=]\s*['\"]?[^\s'\"`]{8,}")),
 ]
 UPDATED_RE = re.compile(r"Updated:?\**\s*:?\s*(\d{4}-\d{2}-\d{2})")
-NOTE_REF_RE = re.compile(r"features/([a-z0-9][a-z0-9-]*)\.md")
+NOTE_REF_RE = c.NOTE_REF_RE
 COMMIT_RE = re.compile(r"Updated:.*@\s*([0-9a-f]{7,40})")
 INDEX_MAX_ROWS, NOTE_MAX_BULLETS, NOTE_MAX_CHARS = 40, 8, 1800
 
@@ -135,6 +135,7 @@ def check_ides() -> None:
     checks = [
         ("claude  rule", has(".claude/CLAUDE.md", c.BEGIN)),
         ("claude  SessionStart hook", has(".claude/settings.json", "ensure-project.py")),
+        ("claude  UserPromptSubmit hook", has(".claude/settings.json", "prompt-topics.py")),
         ("claude  Stop hook", has(".claude/settings.json", "stop-check.py")),
         ("cursor  rule", has(".cursor/rules/project-memory.mdc", "PROTOCOL.md") or has(".cursor/rules/shared-ai-memory.mdc", "PROTOCOL.md")),
         ("cursor  hooks", has(".cursor/hooks.json", "ensure-project.py")),
@@ -145,7 +146,7 @@ def check_ides() -> None:
     for label, ok in checks:
         print("%-4s %s" % ("ok" if ok else "miss", label))
     seen = c.read_seen(c.store_root())
-    for key in ("claude/session-start", "claude/stop", "claude/stop-reminded", "cursor/sessionStart", "cursor/beforeSubmitPrompt", "cursor/stop", "cursor/stop-reminded"):
+    for key in ("claude/session-start", "claude/user-prompt", "claude/stop", "claude/stop-reminded", "cursor/sessionStart", "cursor/beforeSubmitPrompt", "cursor/stop", "cursor/stop-reminded"):
         print("seen %-26s %s" % (key, seen.get(key, "never (in this store)")))
     print("note Gemini/Antigravity/Codex have no hooks: confirm once per tool that a new chat quotes the protocol.")
 

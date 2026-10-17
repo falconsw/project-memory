@@ -15,7 +15,7 @@ Your notes under projects/<slug>/ are never touched.
 
 IDE wiring (every changed file is backed up as <file>.bak-project-memory first):
   --cursor  ~/.cursor/rules/project-memory.mdc + sessionStart/beforeSubmitPrompt/stop hooks in ~/.cursor/hooks.json
-  --claude  SessionStart + Stop hooks in ~/.claude/settings.json + marked block in ~/.claude/CLAUDE.md
+  --claude  SessionStart + UserPromptSubmit + Stop hooks in ~/.claude/settings.json + marked block in ~/.claude/CLAUDE.md
             (the old skill is retired: it duplicated the rule and cost tokens every session)
   --gemini  marked block in ~/.gemini/GEMINI.md (Gemini CLI / Antigravity)
   --codex   marked block in ~/.codex/AGENTS.md
@@ -37,8 +37,8 @@ REPO = os.path.dirname(c.BIN_DIR)
 HOME = os.path.expanduser("~")
 BEGIN, END = c.BEGIN, c.END
 IDES = ("claude", "cursor", "gemini", "codex")
-BIN_FILES = ("project-memory", "aimem_common.py", "ensure-project.py", "ensure-project.sh", "stop-check.py", "note.py", "doctor.py", "install.py")
-MARKERS = ("ensure-project.py", "stop-check.py")
+BIN_FILES = ("project-memory", "aimem_common.py", "ensure-project.py", "ensure-project.sh", "stop-check.py", "prompt-topics.py", "note.py", "doctor.py", "install.py")
+MARKERS = ("ensure-project.py", "stop-check.py", "prompt-topics.py")
 # Rules written by hand before this installer existed; we update those instead of adding a second copy.
 LEGACY_CURSOR_RULES = ("shared-ai-memory.mdc",)
 
@@ -119,7 +119,8 @@ class Installer:
                 os.chmod(dest, os.stat(dest).st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
         tpl_src = os.path.join(REPO, "templates", "project")
         tpl_dest = os.path.join(self.store, "projects", "_template")
-        for dirpath, _, files in os.walk(tpl_src):
+        for dirpath, dirs, files in os.walk(tpl_src):
+            dirs[:] = [d for d in dirs if d != "__pycache__"]  # pip byte-compiles installed .py files
             for f in files:
                 src = os.path.join(dirpath, f)
                 rel = os.path.relpath(src, tpl_src)
@@ -129,7 +130,8 @@ class Installer:
             self.put(user, c.read(os.path.join(REPO, "templates", "USER.md")))
         self.put(os.path.join(self.store, ".repo"), REPO + "\n", backup=False)
         integrations = os.path.join(REPO, "integrations")
-        for dirpath, _, files in os.walk(integrations):
+        for dirpath, dirs, files in os.walk(integrations):
+            dirs[:] = [d for d in dirs if d != "__pycache__"]  # pip byte-compiles installed .py files
             for f in files:
                 src = os.path.join(dirpath, f)
                 rel = os.path.relpath(src, REPO)
@@ -148,6 +150,9 @@ class Installer:
             return
         if os.path.lexists(self.cli_link()) and not os.path.islink(self.cli_link()):
             self.log("skip   %s (exists and is not ours)" % self.cli_link())
+            return
+        if os.path.exists(self.cli_link()) and not os.path.realpath(self.cli_link()).startswith(os.path.realpath(self.store)):
+            # pipx / `uv tool install` put the packaged command here; it already works, leave it.
             return
         self.log("link   %s -> %s" % (self.cli_link(), target))
         if not self.dry:
@@ -199,6 +204,7 @@ class Installer:
         hooks = data.setdefault("hooks", {})
         for event, script, mode in (
             ("SessionStart", "ensure-project.py", "--hook-claude"),
+            ("UserPromptSubmit", "prompt-topics.py", "--claude"),
             ("Stop", "stop-check.py", "--claude"),
         ):
             cmd = self.hook_command(script, mode)

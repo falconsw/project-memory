@@ -13,3 +13,19 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - run: python -m unittest discover -s tests -v
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install build && python -m build
+      - name: Installed wheel wires a throwaway HOME
+        run: |
+          python -m venv /tmp/venv && /tmp/venv/bin/pip install dist/*.whl
+          export HOME="$(mktemp -d)" && mkdir -p "$HOME/.claude"
+          /tmp/venv/bin/project-memory --version
+          /tmp/venv/bin/project-memory install --yes
+          grep -q prompt-topics.py "$HOME/.claude/settings.json"
+          test -f "$HOME/ai-memory/projects/_template/INDEX.md"

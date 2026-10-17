@@ -71,11 +71,14 @@ class InstallTests(Sandbox):
         cmds = [h["command"] for g in data["hooks"]["Stop"] for h in g["hooks"]]
         self.assertEqual(sum("stop-check.py" in c for c in cmds), 1)
         self.assertIn("echo mine", cmds)
+        prompt_cmds = [h["command"] for g in data["hooks"]["UserPromptSubmit"] for h in g["hooks"]]
+        self.assertEqual(sum("prompt-topics.py" in c for c in prompt_cmds), 1)
 
         self.install("--uninstall", "--all")
         data = json.load(open(settings))
         self.assertEqual([h["command"] for g in data["hooks"]["Stop"] for h in g["hooks"]], ["echo mine"])
         self.assertNotIn("SessionStart", data["hooks"])
+        self.assertNotIn("UserPromptSubmit", data["hooks"])
         self.assertNotIn("project-memory", open(os.path.join(self.home, ".claude", "CLAUDE.md")).read())
         self.assertTrue(os.path.isdir(os.path.join(self.store, "projects", "_template")))
 
@@ -95,6 +98,31 @@ class InstallTests(Sandbox):
         self.run_py(link, "uninstall", "--yes")
         self.assertFalse(os.path.lexists(link))
         self.assertNotIn("ensure-project", open(os.path.join(self.home, ".cursor", "hooks.json")).read())
+
+    def test_version_and_packaged_cli_link_is_left_alone(self):
+        sys.path.insert(0, os.path.join(REPO, "bin"))
+        import aimem_common as c
+        out = self.run_py(os.path.join(REPO, "bin", "project-memory"), "--version").stdout
+        self.assertIn("project-memory %s" % c.__version__, out)
+        # pipx / uv tool put their own `project-memory` link in ~/.local/bin
+        bindir = os.path.join(self.home, ".local", "bin")
+        os.makedirs(bindir)
+        packaged = os.path.join(self.home, "venv-bin-project-memory")
+        open(packaged, "w").write("#!/bin/sh\n")
+        os.symlink(packaged, os.path.join(bindir, "project-memory"))
+        self.install("--store-only")
+        self.assertEqual(os.readlink(os.path.join(bindir, "project-memory")), packaged)
+
+    def test_install_skips_bytecode_pip_writes_next_to_package_files(self):
+        import shutil
+        copy = os.path.join(self.home, "site-packages", "project_memory")
+        shutil.copytree(REPO, copy, ignore=shutil.ignore_patterns(".git", "docs"))
+        for sub in ("integrations/openmemory", "templates/project"):
+            os.makedirs(os.path.join(copy, sub, "__pycache__"))
+            open(os.path.join(copy, sub, "__pycache__", "x.cpython-313.pyc"), "wb").write(b"\xf3\r\r\n\x00")
+        self.run_py(os.path.join(copy, "bin", "install.py"), "--yes", "--store", self.store, "--store-only")
+        self.assertTrue(os.path.isfile(os.path.join(self.store, "integrations", "openmemory", "openmemory-mcp.py")))
+        self.assertFalse(os.path.exists(os.path.join(self.store, "integrations", "openmemory", "__pycache__")))
 
     def test_without_terminal_or_yes_nothing_changes(self):
         p = self.run_py(os.path.join(REPO, "bin", "install.py"), "--store", self.store, "--all", check=False)
@@ -212,6 +240,51 @@ class FlowTests(Sandbox):
         self.assertRegex(out, r"seen claude/session-start\s+\d{4}-")
         self.assertRegex(out, r"seen claude/stop-reminded\s+\d{4}-")
         self.assertIn("never", out)
+
+    def prompt(self, text, session="s1"):
+        payload = {"cwd": self.proj, "prompt": text, "session_id": session, "hook_event_name": "UserPromptSubmit"}
+        out = json.loads(self.run_py(self.bin("prompt-topics.py"), "--claude", cwd=self.proj, stdin=json.dumps(payload)).stdout)
+        return out.get("hookSpecificOutput", {}).get("additionalContext", "")
+
+    def test_prompt_hook_injects_matching_note_once_per_session(self):
+        self.run_py(self.bin("note.py"), "cart", "--summary", "cart logic", "--keys", "sepet, CartStore", cwd=self.proj)
+        self.run_py(self.bin("note.py"), "pay", "--summary", "payments", cwd=self.proj)
+        note = os.path.join(self.store, "projects", "shop", "features", "pay.md")
+        with open(note) as fh:
+            body = fh.read()
+        with open(note, "w") as fh:
+            fh.write(body.replace("`path/to/file`", "`src/billing/charge.py`"))
+        ctx = self.prompt("Sepetteki indirim yanlış hesaplanıyor")
+        self.assertIn("features/cart.md", ctx)
+        self.assertNotIn("features/pay.md", ctx)
+        self.assertEqual(self.prompt("sepetteki indirim hâlâ yanlış"), "")  # once per session
+        self.assertIn("features/pay.md", self.prompt("charge.py'de bir hata var"))  # key file, by basename
+        self.assertIn("features/cart.md", self.prompt("sepet yine bozuk", session="s2"))
+        # SessionStart (also fired after /compact) lets the notes in again
+        self.run_py(self.bin("ensure-project.py"), "--hook-claude", cwd=self.proj,
+                    stdin=json.dumps({"cwd": self.proj, "session_id": "s1"}))
+        self.assertIn("features/cart.md", self.prompt("sepet yine bozuk"))
+        self.assertEqual(self.prompt("/review sepet CartStore", session="s3"), "")
+        self.assertEqual(self.prompt("update the readme file", session="s3"), "")  # template placeholder keys do not match
+        self.env["PROJECT_MEMORY_PROMPT_TOPICS"] = "0"
+        self.assertEqual(self.prompt("sepet yine bozuk", session="s4"), "")
+
+    def test_prompt_match_needs_a_key_or_two_name_parts(self):
+        sys.path.insert(0, os.path.join(REPO, "bin"))
+        import aimem_common as c
+        self.run_py(self.bin("note.py"), "market-tracker-ui", cwd=self.proj)
+        dest = os.path.join(self.store, "projects", "shop")
+        index = os.path.join(dest, "INDEX.md")
+        with open(index) as fh:
+            text = fh.read()
+        with open(index, "a") as fh:
+            fh.write("| [Old style](features/legacy-sync.md) | done | sync | SyncEngine |\n")
+        with open(os.path.join(dest, "features", "legacy-sync.md"), "w") as fh:
+            fh.write("# Legacy\n\n- x\n")
+        self.assertEqual(c.match_topics(dest, "the market is down today"), [])
+        self.assertEqual(c.match_topics(dest, "Market tracker çizgisi kayıyor"), ["market-tracker-ui"])
+        self.assertEqual(c.match_topics(dest, "SyncEngine'i yeniden yaz"), ["legacy-sync"])
+        self.assertIn("| market-tracker-ui |", text)
 
     def test_doctor_budget_drift_and_tokens(self):
         self.run_py(self.bin("note.py"), "pay", cwd=self.proj)
